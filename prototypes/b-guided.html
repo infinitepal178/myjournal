@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype B · Guided</title>
+<style>
+*{box-sizing:border-box}
+:root{--ink:#1f1f1f;--mute:#6b6b6b;--line:#c8c8c2;--soft:#ecece6;--paper:#fbfbf8;--bg:#e6e6e0;--accent:#2f5fe0;--accent-soft:#e3eafc;--note:#fff4b8;--note-line:#d8bf4a;--ok:#2e8b57}
+html,body{margin:0}
+body{font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+.proto{position:sticky;top:0;z-index:50;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 16px;background:#202020;color:#eee;font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace}
+.proto a{color:#aaa;text-decoration:none}
+.proto .title{color:#fff;margin-right:auto}
+.proto button{background:transparent;color:#ccc;border:1px solid #555;border-radius:999px;padding:5px 10px;font:inherit;cursor:pointer}
+.proto button.on{background:#fff;color:#111;border-color:#fff}
+.note{font:12px/1.45 ui-monospace,Menlo,monospace;background:var(--note);border:1px dashed var(--note-line);border-radius:4px;padding:8px 10px;color:#4a4020;margin-bottom:12px}
+.note b{display:block;margin-bottom:2px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;border:1.5px solid var(--ink);background:#fff;color:var(--ink);border-radius:12px;padding:13px 16px;font:inherit;font-weight:650;cursor:pointer;text-decoration:none}
+.btn.primary{background:var(--ink);color:#fff}
+.btn.ghost{border-color:var(--line);font-weight:500}
+.btn.wide{width:100%}
+input,textarea{border:1.5px solid var(--line);border-radius:12px;padding:12px 14px;font:inherit;width:100%;background:#fff;color:var(--ink)}
+input:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+textarea{resize:none;min-height:120px}
+.chip{display:inline-block;border:1.5px solid var(--line);border-radius:999px;padding:5px 12px;font-size:13px;background:#fff;cursor:pointer;margin:0 6px 6px 0}
+.chip.on{border-color:var(--ink);background:var(--ink);color:#fff}
+.path{font:11.5px ui-monospace,Menlo,monospace;background:var(--soft);padding:1px 6px;border-radius:4px;word-break:break-all}
+.muted{color:var(--mute)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,160px);background:#111;color:#fff;padding:12px 16px;border-radius:8px;font:13px/1.5 ui-monospace,Menlo,monospace;transition:transform .3s;max-width:calc(100% - 32px);z-index:60}
+.toast{visibility:hidden}.toast.show{transform:translate(-50%,0);visibility:visible}
+
+/* --- layout B: phone + notes --- */
+.stage{display:flex;gap:32px;justify-content:center;align-items:flex-start;padding:28px 16px 48px;flex-wrap:wrap}
+.phone{width:390px;max-width:100%;height:780px;background:#fff;border:2px solid var(--ink);border-radius:40px;padding:14px;position:relative;box-shadow:0 10px 0 rgba(0,0,0,.08)}
+.phone-in{height:100%;border-radius:28px;background:var(--paper);overflow:hidden;display:flex;flex-direction:column;position:relative}
+.status{display:flex;justify-content:space-between;padding:10px 22px 4px;font:600 12px ui-monospace,monospace}
+.side-notes{width:300px;max-width:100%}
+.screen{display:none;flex:1;flex-direction:column;min-height:0}.screen.on{display:flex}
+.top{display:flex;align-items:center;gap:10px;padding:10px 20px}
+.top .back{border:none;background:none;font-size:22px;cursor:pointer;padding:0 4px;color:var(--ink)}
+.progress{flex:1;height:6px;background:var(--soft);border-radius:3px;overflow:hidden}
+.progress b{display:block;height:100%;background:var(--ink);width:0;transition:width .25s}
+.count{font:12px ui-monospace,monospace;color:var(--mute);min-width:36px;text-align:right}
+.body{flex:1;overflow:auto;padding:12px 24px 16px;display:flex;flex-direction:column}
+.kicker{font:600 12px ui-monospace,monospace;text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin:12px 0 6px}
+.q{font-size:26px;line-height:1.2;font-weight:750;letter-spacing:-.02em;margin:0 0 18px}
+.foot{padding:12px 20px 20px;display:flex;gap:10px}
+.foot .btn{flex:1}
+.step{display:none}.step.on{display:flex;flex-direction:column;flex:1}
+.moods{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-top:8px}
+.mood{border:1.5px solid var(--line);background:#fff;border-radius:14px;padding:14px 0 8px;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;font-size:11px;color:var(--mute)}
+.mood i{width:28px;height:28px;border-radius:50%;border:1.5px solid var(--ink);display:block}
+.mood.on{border-color:var(--ink);background:var(--ink);color:#fff}.mood.on i{border-color:#fff;background:#fff}
+.scale{display:flex;gap:8px;margin:4px 0 16px}
+.scale button{flex:1;height:44px;border-radius:12px;border:1.5px solid var(--line);background:#fff;font:600 15px ui-monospace,monospace;cursor:pointer;color:var(--ink)}
+.scale button.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.scale-l{display:flex;justify-content:space-between;font-size:11px;color:var(--mute);margin-top:-10px;margin-bottom:14px}
+.hint{font-size:13px;color:var(--mute);margin-top:10px}
+.review{background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:14px;font-size:14px;margin-bottom:10px}
+.review b{display:block;font-size:12px;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin-bottom:4px}
+.files{font:12px/1.7 ui-monospace,monospace;background:var(--soft);border-radius:10px;padding:10px 12px}
+.done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:24px}
+.done .big{font-size:64px;font-weight:800;line-height:1}
+.tabbar{display:flex;border-top:1.5px solid var(--line);background:#fff}
+.tabbar button{flex:1;padding:10px 0 14px;border:none;background:none;font:12px ui-sans-serif,system-ui;color:var(--mute);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px}
+.tabbar button i{width:20px;height:20px;border:1.5px solid currentColor;border-radius:6px;display:block}
+.tabbar button.on{color:var(--ink);font-weight:700}
+.home-card{background:#fff;border:1.5px solid var(--ink);border-radius:18px;padding:18px;margin-bottom:12px}
+.tl{position:relative;padding-left:18px}
+.tl:before{content:"";position:absolute;left:5px;top:6px;bottom:6px;border-left:1.5px dashed var(--line)}
+.tl-item{position:relative;background:#fff;border:1.5px solid var(--line);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+.tl-item:before{content:"";position:absolute;left:-18px;top:16px;width:11px;height:11px;border-radius:50%;background:var(--paper);border:1.5px solid var(--ink)}
+.tl-item.m5:before,.tl-item.m4:before{background:var(--ink)}
+.tl-item .d{font:600 12px ui-monospace,monospace;color:var(--mute);display:flex;justify-content:space-between}
+.tl-item p{margin:4px 0 6px;font-size:14px}
+.minis{display:flex;gap:10px;font:11px ui-monospace,monospace;color:var(--mute)}
+.week{display:flex;gap:6px;margin:4px 0 14px}
+.week span{flex:1;text-align:center;font:11px ui-monospace,monospace;color:var(--mute)}
+.week span i{display:block;height:34px;border-radius:8px;border:1.5px solid var(--line);margin-bottom:4px;background:#fff}
+.week span i.y{background:var(--ink);border-color:var(--ink)}
+.week span i.t{border-color:var(--accent);border-width:2px}
+.stat-row{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:14px}
+.stat{background:#fff;border:1.5px solid var(--line);border-radius:12px;padding:10px;text-align:center}
+.stat strong{display:block;font-size:22px}
+.stat span{font-size:11px;color:var(--mute)}
+@media (max-width:440px){.stage{padding:12px 8px}.phone{border:none;border-radius:0;padding:0;height:calc(100vh - 80px);box-shadow:none}.phone-in{border-radius:0}.status{display:none}}
+</style>
+</head>
+<body>
+
+<div class="proto">
+  <a href="index.html">← prototypes</a>
+  <span class="title">B · Guided</span>
+  <button data-go="connect">1 Connect</button>
+  <button data-go="home" class="on">2 Today</button>
+  <button data-go="history">3 History</button>
+  <button data-go="checkin">4 Weekly check-in</button>
+</div>
+
+<div class="stage">
+  <div class="phone"><div class="phone-in">
+    <div class="status"><span>21:40</span><span>myjournal</span><span>▮▮▮</span></div>
+
+    <!-- CONNECT -->
+    <section class="screen" id="connect">
+      <div class="body">
+        <div class="kicker">Step 1 of 1 · first run</div>
+        <h1 class="q">Where should your journal live?</h1>
+        <p class="muted" style="margin-top:-8px">A private GitHub repo you own. Every entry becomes a Markdown file there.</p>
+        <label class="kicker">Repo</label><input value="your-username/myjournal-data">
+        <label class="kicker">Token</label><input type="password" value="github_pat_xxxxxxxx">
+        <p class="hint">✓ private repo · ✓ write access · token stays on this phone</p>
+      </div>
+      <div class="foot"><button class="btn primary" data-go="home">Connect</button></div>
+    </section>
+
+    <!-- HOME -->
+    <section class="screen on" id="home">
+      <div class="body">
+        <div class="kicker">Wed 18 Nov</div>
+        <h1 class="q">Good evening.<br>Two minutes tonight?</h1>
+        <div class="week">
+          <span><i class="y"></i>M</span><span><i class="y"></i>T</span><span><i class="t"></i>W</span><span><i></i>T</span><span><i></i>F</span><span><i></i>S</span><span><i></i>S</span>
+        </div>
+        <div class="home-card">
+          <div style="font-weight:700;font-size:17px">Full check-in</div>
+          <div class="muted" style="font-size:14px;margin-bottom:12px">Mood · 3 gratitudes · me, relationships, work · ~4 min</div>
+          <button class="btn primary wide" data-flow="full">Start</button>
+        </div>
+        <div class="home-card" style="border-color:var(--line)">
+          <div style="font-weight:700;font-size:17px">Just gratitude</div>
+          <div class="muted" style="font-size:14px;margin-bottom:12px">Three lines and you're done · ~1 min · still counts for your streak</div>
+          <button class="btn wide" data-flow="quick">Quick entry</button>
+        </div>
+        <p class="hint" style="text-align:center">12-day streak · Sunday check-in in 4 days</p>
+      </div>
+      <nav class="tabbar"><button class="on" data-go="home"><i></i>Today</button><button data-go="history"><i></i>History</button><button data-go="checkin"><i></i>Check-in</button></nav>
+    </section>
+
+    <!-- FLOW -->
+    <section class="screen" id="flow">
+      <div class="top"><button class="back" data-back aria-label="Back">‹</button><div class="progress"><b id="prog"></b></div><span class="count" id="count"></span></div>
+      <div class="body" id="steps">
+
+        <div class="step" data-k="full">
+          <div class="kicker">Check-in</div>
+          <h2 class="q">How was today, overall?</h2>
+          <div class="moods">
+            <button class="mood"><i></i>rough</button><button class="mood"><i></i>meh</button><button class="mood"><i></i>okay</button><button class="mood on"><i></i>good</button><button class="mood"><i></i>great</button>
+          </div>
+          <div class="kicker" style="margin-top:22px">Energy</div>
+          <div class="scale"><button>1</button><button>2</button><button class="on">3</button><button>4</button><button>5</button></div>
+        </div>
+
+        <div class="step" data-k="full quick">
+          <div class="kicker">Gratitude · 1 of 3</div>
+          <h2 class="q">What's one thing you're grateful for today?</h2>
+          <textarea placeholder="Start typing…">A long call with Mum. She sounded genuinely happy.</textarea>
+          <div style="margin-top:12px"><span class="chip">a person</span><span class="chip">a small moment</span><span class="chip">your body</span><span class="chip">something at work</span></div>
+        </div>
+        <div class="step" data-k="full quick">
+          <div class="kicker">Gratitude · 2 of 3</div>
+          <h2 class="q">And another?</h2>
+          <textarea placeholder="Start typing…">Slept 8 hours for the first time this week.</textarea>
+        </div>
+        <div class="step" data-k="full quick">
+          <div class="kicker">Gratitude · 3 of 3</div>
+          <h2 class="q">Who made today easier?</h2>
+          <textarea placeholder="Start typing…"></textarea>
+          <p class="hint">Today's prompt rotates from <span class="path">.journal/config.json</span></p>
+        </div>
+
+        <div class="step" data-k="full">
+          <div class="kicker">Life · Me</div>
+          <h2 class="q">How are <u>you</u> doing: body, mind, energy?</h2>
+          <div class="scale"><button>1</button><button>2</button><button>3</button><button class="on">4</button><button>5</button></div>
+          <div class="scale-l"><span>struggling</span><span>thriving</span></div>
+          <textarea placeholder="A line or two (optional)"></textarea>
+        </div>
+        <div class="step" data-k="full">
+          <div class="kicker">Life · Relationships</div>
+          <h2 class="q">Who did you connect with today?</h2>
+          <div><span class="chip on">Mum</span><span class="chip">Sam</span><span class="chip">Priya</span><span class="chip">Arun</span><span class="chip">+ add</span></div>
+          <div class="scale" style="margin-top:8px"><button>1</button><button>2</button><button class="on">3</button><button>4</button><button>5</button></div>
+          <textarea placeholder="Anything you want to remember or follow up on?"></textarea>
+        </div>
+        <div class="step" data-k="full">
+          <div class="kicker">Life · Work</div>
+          <h2 class="q">One win, one friction.</h2>
+          <div class="scale"><button>1</button><button class="on">2</button><button>3</button><button>4</button><button>5</button></div>
+          <textarea placeholder="Win: …&#10;Friction: …"></textarea>
+        </div>
+        <div class="step" data-k="full">
+          <div class="kicker">Tomorrow</div>
+          <h2 class="q">What's the one thing that would make tomorrow good?</h2>
+          <input placeholder="One line">
+        </div>
+
+        <div class="step" data-k="full quick">
+          <div class="kicker">Review</div>
+          <h2 class="q" style="font-size:22px">Looks good?</h2>
+          <div class="review"><b>Gratitude</b>1. A long call with Mum…<br>2. Slept 8 hours…<br>3. —</div>
+          <div class="review" data-only="full"><b>Life</b>mood 4 · energy 3 · me 4 · relationships 3 · work 2</div>
+          <div class="kicker">Will commit</div>
+          <div class="files">daily/2026/11/2026-11-18/gratitude.md<br><span data-only="full">daily/2026/11/2026-11-18/life.md<br></span>.journal/index.json</div>
+        </div>
+
+      </div>
+      <div class="foot"><button class="btn ghost" data-skip>Skip</button><button class="btn primary" data-next id="nextBtn">Next</button></div>
+    </section>
+
+    <!-- DONE -->
+    <section class="screen" id="done">
+      <div class="done">
+        <div class="big">13</div>
+        <div style="font-weight:700;font-size:18px;margin:6px 0 4px">day streak</div>
+        <p class="muted">Saved to your repo. See you tomorrow.</p>
+        <div class="files" style="text-align:left;margin:10px 0 20px">✓ commit a1b2c3d<br>gratitude: 2026-11-18</div>
+        <button class="btn wide" data-go="history">See this week</button>
+      </div>
+    </section>
+
+    <!-- HISTORY -->
+    <section class="screen" id="history">
+      <div class="body">
+        <div class="kicker">History</div>
+        <h1 class="q" style="font-size:22px">November</h1>
+        <input placeholder="Search entries, people, #tags" style="margin-bottom:14px">
+        <div class="tl" id="tl"></div>
+      </div>
+      <nav class="tabbar"><button data-go="home"><i></i>Today</button><button class="on" data-go="history"><i></i>History</button><button data-go="checkin"><i></i>Check-in</button></nav>
+    </section>
+
+    <!-- CHECK-IN -->
+    <section class="screen" id="checkin">
+      <div class="body">
+        <div class="kicker">Weekly check-in · W47</div>
+        <h1 class="q" style="font-size:22px">Your week in 30 seconds</h1>
+        <div class="stat-row">
+          <div class="stat"><strong>5/7</strong><span>days written</span></div>
+          <div class="stat"><strong>3.6</strong><span>avg mood</span></div>
+          <div class="stat"><strong>14</strong><span>gratitudes</span></div>
+        </div>
+        <div class="review"><b>Lowest area</b>Work · 2.3 avg (down from 3.4 last week)</div>
+        <div class="review"><b>Most mentioned</b>Mum ×3 · Sam ×2 · Priya ×1</div>
+        <div class="review"><b>A gratitude from Monday</b>"Sunny walk at lunch."</div>
+        <button class="btn primary wide" style="margin-top:6px" data-ck>Reflect on the week (5 prompts)</button>
+        <p class="hint" style="text-align:center">saves to <span class="path">checkins/weekly/2026/2026-W47.md</span></p>
+      </div>
+      <nav class="tabbar"><button data-go="home"><i></i>Today</button><button data-go="history"><i></i>History</button><button class="on" data-go="checkin"><i></i>Check-in</button></nav>
+    </section>
+
+  </div></div>
+
+  <div class="side-notes">
+    <div class="note"><b>Direction B · Guided</b>Mobile-first, one question per screen. Lowest friction for a daily habit on your phone.</div>
+    <div class="note"><b>Two modes</b>"Full check-in" (9 steps) or "Just gratitude" (4 steps). Both keep the streak going. Try both from Today.</div>
+    <div class="note"><b>Same files as A</b><span class="path">daily/YYYY/MM/YYYY-MM-DD/gratitude.md</span> and <span class="path">life.md</span>. The quick mode writes only gratitude.md.</div>
+    <div class="note"><b>Check-in uses the data</b>Stats come from frontmatter in that week's files (or <span class="path">.journal/index.json</span>).</div>
+    <div class="note"><b>Build cost</b>Medium. A step engine + one layout. Works well as an installable PWA.</div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+const flowIds=['home','flow','done'];
+function show(id){
+  $$('.screen').forEach(s=>s.classList.toggle('on',s.id===id));
+  const tab=flowIds.includes(id)?'home':id;
+  $$('.proto [data-go]').forEach(b=>b.classList.toggle('on',b.dataset.go===tab));
+}
+function toast(m){const t=$('#toast');t.innerHTML=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),3400)}
+let mode='full',steps=[],i=0;
+function startFlow(m){mode=m;steps=$$('.step').filter(s=>s.dataset.k.split(' ').includes(m));i=0;
+  $$('[data-only]').forEach(el=>el.style.display=el.dataset.only===m?'':'none');show('flow');render()}
+function render(){steps.forEach((s,k)=>s.classList.toggle('on',k===i));$$('.step').forEach(s=>{if(!steps.includes(s))s.classList.remove('on')});
+  $('#prog').style.width=((i+1)/steps.length*100)+'%';$('#count').textContent=`${i+1}/${steps.length}`;
+  const last=i===steps.length-1;$('#nextBtn').textContent=last?'Save to GitHub':'Next';$('[data-skip]').style.display=last?'none':''}
+document.addEventListener('click',e=>{
+  const g=e.target.closest('[data-go]');if(g){show(g.dataset.go);return}
+  const f=e.target.closest('[data-flow]');if(f){startFlow(f.dataset.flow);return}
+  if(e.target.closest('[data-next]')||e.target.closest('[data-skip]')){if(i<steps.length-1){i++;render()}else{show('done');toast('✓ committed to myjournal-data@main')}return}
+  if(e.target.closest('[data-back]')){if(i>0){i--;render()}else show('home');return}
+  const m=e.target.closest('.mood');if(m){$$('.mood',m.parentElement).forEach(x=>x.classList.remove('on'));m.classList.add('on')}
+  const sb=e.target.closest('.scale button');if(sb){$$('button',sb.parentElement).forEach(x=>x.classList.remove('on'));sb.classList.add('on')}
+  const c=e.target.closest('.chip');if(c)c.classList.toggle('on');
+  if(e.target.closest('[data-ck]'))toast('→ same step flow as Today, with 5 weekly prompts');
+});
+const days=[[17,'Tue',4,'Sam covered the client call so I could finish the deck.','me 4 · rel 3 · work 2'],[16,'Mon',3,'Sunny walk at lunch.','me 3 · rel 3 · work 3'],[15,'Sun',5,'Dinner with Priya & Arun. Laughed a lot.','✓ weekly check-in W46'],[14,'Sat',4,'Finished the book.','gratitude only'],[13,'Fri',2,'Hot shower after a long day.','me 2 · rel 3 · work 2']];
+$('#tl').innerHTML=days.map(([d,w,m,g,s])=>`<div class="tl-item m${m}"><div class="d"><span>${w} ${d} Nov</span><span>mood ${m}</span></div><p>${g}</p><div class="minis">${s}</div></div>`).join('');
+</script>
+</body>
+</html>

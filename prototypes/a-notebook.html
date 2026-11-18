@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype A · Notebook</title>
+<style>
+*{box-sizing:border-box}
+:root{--ink:#1f1f1f;--mute:#6b6b6b;--line:#c8c8c2;--soft:#ecece6;--paper:#fbfbf8;--bg:#e6e6e0;--accent:#2f5fe0;--accent-soft:#e3eafc;--note:#fff4b8;--note-line:#d8bf4a;--ok:#2e8b57}
+html,body{margin:0}
+body{font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+.proto{position:sticky;top:0;z-index:50;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 16px;background:#202020;color:#eee;font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace}
+.proto a{color:#aaa;text-decoration:none}
+.proto .title{color:#fff;margin-right:auto}
+.proto button{background:transparent;color:#ccc;border:1px solid #555;border-radius:999px;padding:5px 10px;font:inherit;cursor:pointer}
+.proto button.on{background:#fff;color:#111;border-color:#fff}
+.screen{display:none}.screen.on{display:block}
+.note{font:12px/1.45 ui-monospace,Menlo,monospace;background:var(--note);border:1px dashed var(--note-line);border-radius:4px;padding:8px 10px;color:#4a4020;margin-bottom:12px}
+.note b{display:block;margin-bottom:2px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--ink);background:#fff;color:var(--ink);border-radius:6px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none}
+.btn.primary{background:var(--ink);color:#fff}
+.btn.ghost{border-color:var(--line);font-weight:500}
+input,textarea{border:1.5px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit;width:100%;background:#fff;color:var(--ink)}
+input:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+textarea{resize:vertical;min-height:64px}
+label.lbl{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:0 0 6px}
+.pips{display:flex;gap:6px}
+.pip{width:30px;height:30px;border-radius:50%;border:1.5px solid var(--ink);background:#fff;cursor:pointer;font:12px ui-monospace,monospace;color:var(--ink)}
+.pip.on{background:var(--ink);color:#fff}
+.chip{display:inline-block;border:1.5px solid var(--line);border-radius:999px;padding:3px 10px;font-size:13px;background:#fff;cursor:pointer;margin:0 4px 4px 0}
+.chip.on{border-color:var(--ink);background:var(--ink);color:#fff}
+.path{font:12px ui-monospace,Menlo,monospace;background:var(--soft);padding:1px 6px;border-radius:4px;word-break:break-all}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,160px);background:#111;color:#fff;padding:12px 16px;border-radius:8px;font:13px/1.5 ui-monospace,Menlo,monospace;transition:transform .3s;max-width:calc(100% - 32px);z-index:60}
+.toast{visibility:hidden}.toast.show{transform:translate(-50%,0);visibility:visible}
+.muted{color:var(--mute)}
+
+/* --- layout A --- */
+.app{display:grid;grid-template-columns:230px minmax(0,1fr) 250px;min-height:calc(100vh - 44px)}
+.side{background:var(--paper);border-right:1.5px solid var(--line);padding:20px 16px;display:flex;flex-direction:column;gap:18px}
+.logo{font-weight:800;font-size:18px;letter-spacing:-.02em}
+.streak{border:1.5px solid var(--ink);border-radius:8px;padding:10px 12px;background:#fff}
+.streak strong{font-size:22px}
+.nav a{display:block;padding:7px 10px;border-radius:6px;color:var(--ink);text-decoration:none;cursor:pointer}
+.nav a.on{background:var(--ink);color:#fff}
+.nav a:hover:not(.on){background:var(--soft)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font:11px ui-monospace,monospace;text-align:center}
+.cal span{aspect-ratio:1;display:grid;place-items:center;border-radius:4px}
+.cal .h{color:var(--mute)}
+.cal .d{background:#fff;border:1px solid var(--line);cursor:pointer}
+.cal .d.has{background:#cfd6c8;border-color:#9aa58f}
+.cal .d.today{outline:2px solid var(--accent);font-weight:700}
+.sync{margin-top:auto;font:11px/1.4 ui-monospace,monospace;color:var(--mute)}
+.sync i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);margin-right:6px}
+main.page{padding:28px clamp(16px,4vw,48px) 100px;max-width:760px;width:100%;margin:0 auto}
+.date h1{margin:0;font-size:30px;letter-spacing:-.02em}
+.date p{margin:4px 0 24px}
+.sheet{background:#fff;border:1.5px solid var(--ink);border-radius:10px;padding:22px;margin-bottom:22px}
+.sheet h2{margin:0 0 4px;font-size:18px}
+.sheet .sub{margin:0 0 16px;color:var(--mute);font-size:14px}
+.gline{display:grid;grid-template-columns:28px 1fr;align-items:center;gap:8px;margin-bottom:8px}
+.gline span{font:600 14px ui-monospace,monospace;color:var(--mute)}
+.gline input{border:none;border-bottom:1.5px dashed var(--line);border-radius:0;padding:8px 2px}
+.prompt{background:var(--soft);border-radius:8px;padding:10px 12px;margin-top:14px;font-size:14px}
+.row{display:flex;gap:28px;flex-wrap:wrap;margin-bottom:18px}
+.area{border-top:1.5px solid var(--soft);padding-top:16px;margin-top:16px}
+.area-h{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.area-h h3{margin:0;font-size:16px}
+.savebar{position:sticky;bottom:0;background:rgba(251,251,248,.95);border-top:1.5px solid var(--line);padding:12px clamp(16px,4vw,48px);display:flex;align-items:center;gap:12px;justify-content:flex-end;margin:0 calc(-1*clamp(16px,4vw,48px))}
+.savebar .muted{margin-right:auto;font-size:13px}
+.notes{padding:28px 16px;border-left:1.5px dashed var(--line)}
+/* history */
+.hist{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:22px}
+.bigcal{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.bigcal .h{font:11px ui-monospace,monospace;color:var(--mute);text-align:center}
+.bigcal .d{border:1.5px solid var(--line);border-radius:6px;background:#fff;min-height:58px;padding:4px 6px;font:12px ui-monospace,monospace;cursor:pointer;position:relative}
+.bigcal .d.sel{border-color:var(--ink);box-shadow:0 0 0 2px var(--ink) inset}
+.bigcal .d.today{border-color:var(--accent)}
+.dots{position:absolute;left:6px;bottom:5px;display:flex;gap:3px}
+.dots i{width:8px;height:8px;border-radius:50%;display:block}
+.dots .g{background:#d9a441}.dots .l{background:#5a78c8}.dots .c{background:#4a9b6e}
+.md{font-size:14px}
+.md pre{white-space:pre-wrap;font:12.5px/1.55 ui-monospace,Menlo,monospace;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:12px;margin:0}
+.tabs{display:flex;gap:6px;margin-bottom:10px;flex-wrap:wrap}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--mute);margin-top:10px;flex-wrap:wrap}
+.legend i{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:5px}
+/* check-in */
+.ck{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:22px}
+.bar{display:grid;grid-template-columns:110px 1fr 36px;align-items:center;gap:8px;margin-bottom:8px;font-size:14px}
+.bar div{height:12px;border-radius:6px;background:var(--soft);overflow:hidden}
+.bar div b{display:block;height:100%;background:var(--ink)}
+ul.glist{padding-left:18px;margin:8px 0 0;font-size:14px}
+ul.glist li{margin-bottom:4px}
+/* connect */
+.connect{min-height:calc(100vh - 44px);display:grid;place-items:center;padding:24px 16px}
+.ccard{background:#fff;border:1.5px solid var(--ink);border-radius:12px;padding:28px;max-width:440px;width:100%}
+.ccard h1{margin:0 0 6px;font-size:24px}
+.field{margin-bottom:14px}
+.check{display:flex;flex-direction:column;gap:6px;font:12px ui-monospace,monospace;margin:12px 0 18px;color:var(--mute)}
+.check .ok{color:var(--ok)}
+@media (max-width:1100px){.app{grid-template-columns:200px minmax(0,1fr)}.notes{grid-column:1/-1;border-left:none;border-top:1.5px dashed var(--line);display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px}.notes .note{margin:0}}
+@media (max-width:760px){.app{grid-template-columns:1fr}.side{border-right:none;border-bottom:1.5px solid var(--line)}.side .minical-wrap,.side .sync{display:none}.nav{display:flex;gap:4px;flex-wrap:wrap}.hist,.ck{grid-template-columns:1fr}.bigcal .d{min-height:42px}}
+</style>
+</head>
+<body>
+
+<div class="proto">
+  <a href="index.html">← prototypes</a>
+  <span class="title">A · Notebook</span>
+  <button data-go="connect">1 Connect</button>
+  <button data-go="today" class="on">2 Today</button>
+  <button data-go="history">3 History</button>
+  <button data-go="checkin">4 Weekly check-in</button>
+</div>
+
+<!-- ============ CONNECT ============ -->
+<section class="screen" id="connect">
+  <div class="connect">
+    <div class="ccard">
+      <div class="logo" style="margin-bottom:18px">myjournal</div>
+      <h1>Connect your journal repo</h1>
+      <p class="muted" style="margin-top:0">Entries are saved as Markdown in a private GitHub repo you own. Nothing is stored anywhere else.</p>
+      <div class="field"><label class="lbl">Data repo</label><input value="your-username/myjournal-data"></div>
+      <div class="field"><label class="lbl">Fine-grained token</label><input type="password" value="github_pat_xxxxxxxxxxxxxxxx"></div>
+      <div class="check">
+        <span class="ok">✓ repo found · private</span>
+        <span class="ok">✓ token can write Contents</span>
+        <span>○ README.md + .journal/config.json will be created</span>
+      </div>
+      <button class="btn primary" data-go="today" style="width:100%;justify-content:center">Connect &amp; start writing</button>
+      <p class="muted" style="font-size:13px;margin:14px 0 0">How to create a token → <span class="path">Settings › Developer settings › Fine-grained tokens</span></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ APP SHELL (today / history / checkin) ============ -->
+<div class="app" id="shell">
+  <aside class="side">
+    <div class="logo">myjournal</div>
+    <div class="streak"><strong>12</strong> day streak<div class="muted" style="font-size:12px">best: 31 · Oct</div></div>
+    <nav class="nav">
+      <a data-go="today">Today</a>
+      <a data-go="history">History</a>
+      <a data-go="checkin">Check-ins</a>
+      <a data-go="connect">Settings</a>
+    </nav>
+    <div class="minical-wrap">
+      <label class="lbl">November 2026</label>
+      <div class="cal" id="minical"></div>
+    </div>
+    <div class="sync"><i></i>synced · myjournal-data@main<br>last commit 2 min ago</div>
+  </aside>
+
+  <!-- TODAY -->
+  <main class="page screen on" id="today">
+    <div class="date">
+      <h1>Wednesday, 18 November</h1>
+      <p class="muted">Week 47 · Day 12 of your streak · not saved yet</p>
+    </div>
+
+    <div class="sheet">
+      <h2>Gratitude</h2>
+      <p class="sub">Three things, big or small.</p>
+      <div class="gline"><span>1.</span><input placeholder="I'm grateful for…" value="A long call with Mum. She sounded genuinely happy."></div>
+      <div class="gline"><span>2.</span><input placeholder="I'm grateful for…" value="Slept 8 hours for the first time this week."></div>
+      <div class="gline"><span>3.</span><input placeholder="I'm grateful for…"></div>
+      <a class="muted" style="font-size:13px;cursor:pointer">+ add another</a>
+      <div class="prompt"><b>Prompt of the day ↻</b> Who made today easier?<br><input style="margin-top:8px" placeholder="Optional"></div>
+    </div>
+
+    <div class="sheet">
+      <h2>Life check-in</h2>
+      <p class="sub">How today actually went.</p>
+      <div class="row">
+        <div><label class="lbl">Mood</label><div class="pips" data-v="4"></div></div>
+        <div><label class="lbl">Energy</label><div class="pips" data-v="3"></div></div>
+      </div>
+
+      <div class="area">
+        <div class="area-h"><h3>Me</h3><div class="pips" data-v="4"></div></div>
+        <textarea placeholder="Body, mind, habits, how you're feeling…">Gym in the morning, felt sharp until 3pm…</textarea>
+      </div>
+      <div class="area">
+        <div class="area-h"><h3>Relationships</h3><div class="pips" data-v="3"></div></div>
+        <div style="margin-bottom:8px"><span class="chip on">Mum</span><span class="chip">Sam</span><span class="chip">Priya</span><span class="chip">+ person</span></div>
+        <textarea placeholder="Who did you connect with? Anything unsaid?"></textarea>
+      </div>
+      <div class="area">
+        <div class="area-h"><h3>Work</h3><div class="pips" data-v="2"></div></div>
+        <textarea placeholder="One win, one friction."></textarea>
+      </div>
+      <div class="area">
+        <h3 style="margin:0 0 8px;font-size:16px">Tomorrow I want to…</h3>
+        <input placeholder="One line">
+      </div>
+    </div>
+
+    <div class="savebar">
+      <span class="muted">● Draft autosaved on this device · 21:42</span>
+      <button class="btn ghost" data-preview>Preview files</button>
+      <button class="btn primary" data-save>Save to GitHub</button>
+    </div>
+  </main>
+
+  <!-- HISTORY -->
+  <main class="page screen" id="history" style="max-width:1000px">
+    <div class="date"><h1>History</h1><p class="muted">Every dot is a file in <span class="path">daily/2026/11/</span></p></div>
+    <div class="hist">
+      <div class="sheet">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <button class="btn ghost">‹</button><b>November 2026</b><button class="btn ghost">›</button>
+        </div>
+        <div class="bigcal" id="bigcal"></div>
+        <div class="legend"><span><i style="background:#d9a441"></i>gratitude</span><span><i style="background:#5a78c8"></i>life</span><span><i style="background:#4a9b6e"></i>check-in</span></div>
+        <input style="margin-top:16px" placeholder="Search all entries…  e.g. “Priya”, #deadline">
+      </div>
+      <div class="sheet md">
+        <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+          <b id="histTitle">Tue 17 Nov 2026</b>
+          <span class="muted" style="font-size:12px">3 versions · <a href="#" style="color:inherit">open on GitHub ↗</a></span>
+        </div>
+        <div class="tabs"><span class="chip on">gratitude.md</span><span class="chip">life.md</span><span class="chip">raw</span></div>
+        <pre id="histBody"></pre>
+      </div>
+    </div>
+  </main>
+
+  <!-- CHECK-IN -->
+  <main class="page screen" id="checkin" style="max-width:1000px">
+    <div class="date"><h1>Weekly check-in · W47</h1><p class="muted">Mon 16 – Sun 22 Nov · saves to <span class="path">checkins/weekly/2026/2026-W47.md</span></p></div>
+    <div class="ck">
+      <div class="sheet">
+        <h2>Your week so far</h2>
+        <p class="sub">Pulled from 3 daily entries.</p>
+        <div class="bar"><span>Mood</span><div><b style="width:72%"></b></div><span>3.6</span></div>
+        <div class="bar"><span>Me</span><div><b style="width:80%"></b></div><span>4.0</span></div>
+        <div class="bar"><span>Relationships</span><div><b style="width:60%"></b></div><span>3.0</span></div>
+        <div class="bar"><span>Work</span><div><b style="width:46%"></b></div><span>2.3</span></div>
+        <label class="lbl" style="margin-top:18px">Gratitude this week</label>
+        <ul class="glist">
+          <li>A long call with Mum</li><li>Slept 8 hours</li><li>Sam covered the client call</li>
+          <li>Sunny walk at lunch</li><li>Finished the book</li><li>Dinner with Priya &amp; Arun</li>
+        </ul>
+      </div>
+      <div class="sheet">
+        <h2>Reflect</h2>
+        <p class="sub">Five prompts, about five minutes.</p>
+        <div class="field"><label class="lbl">Best moment of the week</label><textarea></textarea></div>
+        <div class="field"><label class="lbl">What drained me</label><textarea></textarea></div>
+        <div class="field"><label class="lbl">A relationship to invest in next week</label><textarea></textarea></div>
+        <div class="field"><label class="lbl">Work: what moved, what's stuck</label><textarea></textarea></div>
+        <div class="field"><label class="lbl">One intention for W48</label><input></div>
+        <button class="btn primary" data-save-ck>Save check-in</button>
+      </div>
+    </div>
+  </main>
+
+  <aside class="notes">
+    <div class="note"><b>Direction A · Notebook</b>Calm and desktop-first: one long page per day, like a paper journal. Fastest to build.</div>
+    <div class="note"><b>Save writes 2 files</b><span class="path">daily/2026/11/2026-11-18/gratitude.md</span><br><span class="path">daily/2026/11/2026-11-18/life.md</span></div>
+    <div class="note"><b>Calendar dots</b>Built from one call: <span class="path">git/trees/main?recursive=1</span></div>
+    <div class="note"><b>Drafts</b>Autosave to localStorage; cleared after a successful commit.</div>
+    <div class="note"><b>Mobile</b>Sidebar collapses to a top nav. Could reuse prototype B's step flow instead.</div>
+  </aside>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+function show(id){
+  $('#connect').classList.toggle('on',id==='connect');
+  $('#shell').style.display=id==='connect'?'none':'';
+  $$('#shell .screen').forEach(s=>s.classList.toggle('on',s.id===id));
+  $$('[data-go]').forEach(b=>b.classList.toggle('on',b.dataset.go===id));
+  scrollTo(0,0);
+}
+function toast(m){const t=$('#toast');t.innerHTML=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),3600)}
+$$('.pips').forEach(p=>{for(let i=1;i<=5;i++){const b=document.createElement('button');b.className='pip'+(i==p.dataset.v?' on':'');b.textContent=i;p.append(b)}});
+document.addEventListener('click',e=>{
+  const g=e.target.closest('[data-go]');if(g){e.preventDefault();show(g.dataset.go);return}
+  const p=e.target.closest('.pip');if(p){$$('.pip',p.parentElement).forEach(x=>x.classList.remove('on'));p.classList.add('on')}
+  const c=e.target.closest('.chip');
+  if(c&&c.closest('.tabs')){$$('.chip',c.parentElement).forEach(x=>x.classList.remove('on'));c.classList.add('on');
+    const n=parseInt($('#histTitle').textContent)||17,f=c.textContent;
+    $('#histBody').textContent=f==='life.md'?lifeSample(n):sample(n);}
+  else if(c)c.classList.toggle('on');
+  if(e.target.closest('[data-save]'))toast('✓ committed to myjournal-data@main<br>gratitude: 2026-11-18 · life: 2026-11-18<br>2 files · streak → 13 days');
+  if(e.target.closest('[data-preview]'))toast('preview → opens a side panel showing the exact Markdown<br>for gratitude.md and life.md before committing');
+  if(e.target.closest('[data-save-ck]'))toast('✓ committed checkins/weekly/2026/2026-W47.md');
+});
+// calendars: Nov 2026 starts on Sunday (Mon-first grid → 6 blanks)
+const has=new Set([2,3,4,5,6,7,9,10,11,12,13,14,15,16,17]), today=18;
+const mini=$('#minical'),big=$('#bigcal');
+['M','T','W','T','F','S','S'].forEach(d=>{mini.insertAdjacentHTML('beforeend',`<span class="h">${d}</span>`);big.insertAdjacentHTML('beforeend',`<div class="h">${d}</div>`)});
+for(let i=0;i<6;i++){mini.insertAdjacentHTML('beforeend','<span></span>');big.insertAdjacentHTML('beforeend','<div></div>')}
+for(let d=1;d<=30;d++){
+  mini.insertAdjacentHTML('beforeend',`<span class="d ${has.has(d)?'has':''} ${d===today?'today':''}" data-go="history">${d}</span>`);
+  const dots=has.has(d)?`<span class="dots"><i class="g"></i><i class="l"></i>${d===15?'<i class="c"></i>':''}</span>`:'';
+  big.insertAdjacentHTML('beforeend',`<div class="d ${d===17?'sel':''} ${d===today?'today':''}" data-day="${d}">${d}${dots}</div>`);
+}
+const sample=d=>`---
+type: gratitude
+date: 2026-11-${String(d).padStart(2,'0')}
+tags: [family]
+---
+# Gratitude · ${d} Nov 2026
+
+1. Sam covered the client call so I could finish the deck.
+2. Sunny walk at lunch.
+3. Finished the book I've been reading since August.`;
+const lifeSample=d=>`---
+type: life
+date: 2026-11-${String(d).padStart(2,'0')}
+mood: 4
+energy: 3
+scores: { me: 4, relationships: 3, work: 2 }
+people: [Sam]
+---
+# Life · ${d} Nov 2026
+
+## Me
+Tired but steady. Walked at lunch.
+
+## Relationships
+Thanked Sam properly.
+
+## Work
+Deck nearly done. Too many side asks.`;
+$('#histBody').textContent=sample(17);
+big.addEventListener('click',e=>{const d=e.target.closest('[data-day]');if(!d)return;$$('.bigcal .d').forEach(x=>x.classList.remove('sel'));d.classList.add('sel');
+  const n=+d.dataset.day;$('#histTitle').textContent=`${n} Nov 2026`;$('#histBody').textContent=has.has(n)?sample(n):'No entry this day.\n\n→ Write a late entry';});
+</script>
+</body>
+</html>
