@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prototype C · Dashboard</title>
+<style>
+*{box-sizing:border-box}
+:root{--ink:#1f1f1f;--mute:#6b6b6b;--line:#c8c8c2;--soft:#ecece6;--paper:#fbfbf8;--bg:#e6e6e0;--accent:#2f5fe0;--accent-soft:#e3eafc;--note:#fff4b8;--note-line:#d8bf4a;--ok:#2e8b57}
+html,body{margin:0}
+body{font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+.proto{position:sticky;top:0;z-index:50;display:flex;gap:8px;align-items:center;flex-wrap:wrap;padding:8px 16px;background:#202020;color:#eee;font:12px/1.2 ui-monospace,SFMono-Regular,Menlo,monospace}
+.proto a{color:#aaa;text-decoration:none}
+.proto .title{color:#fff;margin-right:auto}
+.proto button{background:transparent;color:#ccc;border:1px solid #555;border-radius:999px;padding:5px 10px;font:inherit;cursor:pointer}
+.proto button.on{background:#fff;color:#111;border-color:#fff}
+.screen{display:none}.screen.on{display:block}
+.note{font:12px/1.45 ui-monospace,Menlo,monospace;background:var(--note);border:1px dashed var(--note-line);border-radius:4px;padding:8px 10px;color:#4a4020}
+.note b{display:block;margin-bottom:2px}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1.5px solid var(--ink);background:#fff;color:var(--ink);border-radius:6px;padding:8px 14px;font:inherit;font-weight:600;cursor:pointer;text-decoration:none}
+.btn.primary{background:var(--ink);color:#fff}
+.btn.ghost{border-color:var(--line);font-weight:500}
+input,textarea,select{border:1.5px solid var(--line);border-radius:6px;padding:8px 10px;font:inherit;width:100%;background:#fff;color:var(--ink)}
+input:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+textarea{resize:vertical;min-height:70px}
+label.lbl{display:block;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.06em;color:var(--mute);margin:0 0 6px}
+.path{font:12px ui-monospace,Menlo,monospace;background:var(--soft);padding:1px 6px;border-radius:4px;word-break:break-all}
+.muted{color:var(--mute)}
+.toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,160px);background:#111;color:#fff;padding:12px 16px;border-radius:8px;font:13px/1.5 ui-monospace,Menlo,monospace;transition:transform .3s;max-width:calc(100% - 32px);z-index:60}
+.toast{visibility:hidden}.toast.show{transform:translate(-50%,0);visibility:visible}
+
+/* --- layout C --- */
+.topnav{display:flex;align-items:center;gap:18px;padding:14px clamp(16px,3vw,32px);background:#fff;border-bottom:1.5px solid var(--line);flex-wrap:wrap}
+.topnav .logo{font-weight:800;font-size:18px;margin-right:12px}
+.topnav a{color:var(--mute);text-decoration:none;cursor:pointer;padding:4px 0;border-bottom:2px solid transparent}
+.topnav a.on{color:var(--ink);border-color:var(--ink);font-weight:600}
+.topnav .right{margin-left:auto;font:12px ui-monospace,monospace;color:var(--mute)}
+.wrap{padding:22px clamp(16px,3vw,32px) 48px;max-width:1240px;margin:0 auto}
+.grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px}
+.card{background:#fff;border:1.5px solid var(--ink);border-radius:10px;padding:18px;min-width:0}
+.card.soft{border-color:var(--line)}
+.card h2{font-size:16px;margin:0 0 12px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card h2 small{font-weight:400;font-size:12px;color:var(--mute)}
+.s3{grid-column:span 3}.s4{grid-column:span 4}.s5{grid-column:span 5}.s7{grid-column:span 7}.s8{grid-column:span 8}.s12{grid-column:span 12}
+.tile strong{display:block;font-size:30px;line-height:1.1;letter-spacing:-.02em}
+.tile span{font-size:13px;color:var(--mute)}
+.qg{display:grid;gap:8px;margin-bottom:16px}
+.slider{display:grid;grid-template-columns:120px 1fr 28px;align-items:center;gap:10px;margin-bottom:6px;font-size:14px}
+.slider input{padding:0;border:none;accent-color:var(--ink)}
+.slider output{font:600 13px ui-monospace,monospace;text-align:right}
+.split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+pre.file{white-space:pre-wrap;font:12px/1.55 ui-monospace,Menlo,monospace;background:var(--paper);border:1px solid var(--line);border-radius:6px;padding:12px;margin:0}
+.spark{display:flex;align-items:flex-end;gap:4px;height:90px;border-bottom:1.5px solid var(--line);padding-bottom:2px}
+.spark i{flex:1;background:var(--ink);border-radius:3px 3px 0 0;display:block;opacity:.85}
+.spark i.t{background:var(--accent)}
+.axis{display:flex;justify-content:space-between;font:11px ui-monospace,monospace;color:var(--mute);margin-top:4px}
+.hbar{display:grid;grid-template-columns:100px 1fr 30px;gap:8px;align-items:center;font-size:14px;margin-bottom:8px}
+.hbar div{height:10px;background:var(--soft);border-radius:5px;overflow:hidden}.hbar div b{display:block;height:100%;background:var(--ink)}
+.feed{list-style:none;margin:0;padding:0;font-size:14px}
+.feed li{padding:8px 0;border-bottom:1px solid var(--soft)}
+.feed li small{display:block;font:11px ui-monospace,monospace;color:var(--mute)}
+.heat{display:grid;grid-template-rows:repeat(7,11px);grid-auto-flow:column;grid-auto-columns:11px;gap:3px;overflow-x:auto;padding-bottom:6px}
+.heat i{border-radius:2px;background:var(--soft);display:block}
+.heat i.l1{background:#c9cfc2}.heat i.l2{background:#97a08b}.heat i.l3{background:#5d6754}.heat i.l4{background:#2b3226}
+.list{width:100%;border-collapse:collapse;font-size:14px}
+.list th{text-align:left;font:600 11px ui-monospace,monospace;color:var(--mute);text-transform:uppercase;padding:8px 6px;border-bottom:1.5px solid var(--line)}
+.list td{padding:9px 6px;border-bottom:1px solid var(--soft);vertical-align:top}
+.tag{font:11px ui-monospace,monospace;border:1px solid var(--line);border-radius:4px;padding:0 5px;margin-right:3px;white-space:nowrap}
+.notes{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin-top:22px}
+.checkline{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px;font-size:14px}
+.checkline span{font:600 12px ui-monospace,monospace;background:var(--soft);border-radius:4px;padding:2px 6px;white-space:nowrap}
+.connect{display:grid;place-items:center;padding:48px 16px}
+.ccard{background:#fff;border:1.5px solid var(--ink);border-radius:12px;padding:28px;max-width:720px;width:100%;display:grid;grid-template-columns:1fr 1fr;gap:24px}
+@media (max-width:980px){.s3{grid-column:span 6}.s4,.s5,.s7,.s8{grid-column:span 12}}
+@media (max-width:640px){.s3{grid-column:span 12}.split,.ccard{grid-template-columns:1fr}.slider{grid-template-columns:96px 1fr 24px}}
+</style>
+</head>
+<body>
+
+<div class="proto">
+  <a href="index.html">← prototypes</a>
+  <span class="title">C · Dashboard</span>
+  <button data-go="connect">1 Connect</button>
+  <button data-go="home" class="on">2 Today</button>
+  <button data-go="history">3 History</button>
+  <button data-go="checkin">4 Monthly check-in</button>
+</div>
+
+<!-- CONNECT -->
+<section class="screen" id="connect">
+  <div class="connect"><div class="ccard">
+    <div>
+      <div style="font-weight:800;font-size:18px;margin-bottom:14px">myjournal</div>
+      <h1 style="margin:0 0 8px;font-size:24px">Your journal, in your GitHub.</h1>
+      <p class="muted">Private repo. Plain Markdown. Every save is a commit, so you get full history and can export any time.</p>
+      <div style="margin-bottom:12px"><label class="lbl">Data repo</label><input value="your-username/myjournal-data"></div>
+      <div style="margin-bottom:12px"><label class="lbl">Token</label><input type="password" value="github_pat_xxxxxxxx"></div>
+      <div style="margin-bottom:16px"><label class="lbl">Timezone</label><select><option>Auto-detect from browser</option></select></div>
+      <button class="btn primary" data-go="home">Connect</button>
+    </div>
+    <div>
+      <label class="lbl">We'll create this structure</label>
+      <pre class="file">myjournal-data/
+├── README.md
+├── daily/
+│   └── 2026/11/2026-11-18/
+│       ├── gratitude.md
+│       └── life.md
+├── checkins/
+│   ├── weekly/2026/2026-W47.md
+│   └── monthly/2026/2026-11.md
+└── .journal/
+    ├── config.json
+    └── index.json</pre>
+    </div>
+  </div></div>
+</section>
+
+<div id="shell">
+<nav class="topnav">
+  <span class="logo">myjournal</span>
+  <a data-go="home">Today</a><a data-go="history">History</a><a data-go="checkin">Check-ins</a><a data-go="connect">Settings</a>
+  <span class="right">● synced · myjournal-data@main</span>
+</nav>
+
+<!-- HOME / TODAY -->
+<section class="screen on" id="home"><div class="wrap">
+  <div class="grid">
+    <div class="card soft tile s3"><strong>12</strong><span>day streak · best 31</span></div>
+    <div class="card soft tile s3"><strong>17 / 18</strong><span>days written in November</span></div>
+    <div class="card soft tile s3"><strong>3.8</strong><span>avg mood, last 14 days ↑ 0.3</span></div>
+    <div class="card soft tile s3"><strong>Sun</strong><span>weekly check-in due · W47</span></div>
+
+    <div class="card s8">
+      <h2>Today · Wed 18 Nov <small>not saved yet</small></h2>
+      <div class="split">
+        <div>
+          <label class="lbl">Grateful for</label>
+          <div class="qg">
+            <input data-g placeholder="1." value="A long call with Mum">
+            <input data-g placeholder="2." value="Slept 8 hours">
+            <input data-g placeholder="3.">
+          </div>
+          <label class="lbl">Life check-in</label>
+          <div class="slider"><span>Mood</span><input type="range" min="1" max="5" value="4" data-s="mood"><output>4</output></div>
+          <div class="slider"><span>Energy</span><input type="range" min="1" max="5" value="3" data-s="energy"><output>3</output></div>
+          <div class="slider"><span>Me</span><input type="range" min="1" max="5" value="4" data-s="me"><output>4</output></div>
+          <div class="slider"><span>Relationships</span><input type="range" min="1" max="5" value="3" data-s="relationships"><output>3</output></div>
+          <div class="slider"><span>Work</span><input type="range" min="1" max="5" value="2" data-s="work"><output>2</output></div>
+          <label class="lbl" style="margin-top:12px">One line about today</label>
+          <textarea data-n placeholder="Optional. Expand into full Me / Relationships / Work notes →">Deck is late; I said yes to too many side asks.</textarea>
+          <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+            <button class="btn primary" data-save>Save to GitHub</button>
+            <button class="btn ghost" data-expand>Write more</button>
+          </div>
+        </div>
+        <div>
+          <label class="lbl">Live file preview · <span id="fp" class="path">life.md</span></label>
+          <pre class="file" id="preview"></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="card s4" style="display:flex;flex-direction:column;gap:18px">
+      <div>
+        <h2>Mood · last 14 days</h2>
+        <div class="spark" id="spark"></div>
+        <div class="axis"><span>5 Nov</span><span>today</span></div>
+      </div>
+      <div>
+        <h2>Life balance <small>14-day avg</small></h2>
+        <div class="hbar"><span>Me</span><div><b style="width:78%"></b></div><span>3.9</span></div>
+        <div class="hbar"><span>Relationships</span><div><b style="width:64%"></b></div><span>3.2</span></div>
+        <div class="hbar"><span>Work</span><div><b style="width:52%"></b></div><span>2.6</span></div>
+      </div>
+      <div>
+        <h2>Recent gratitude</h2>
+        <ul class="feed">
+          <li>Sam covered the client call<small>Tue 17</small></li>
+          <li>Sunny walk at lunch<small>Mon 16</small></li>
+          <li>Dinner with Priya &amp; Arun<small>Sun 15</small></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  <div class="notes">
+    <div class="note"><b>Direction C · Dashboard</b>Overview-first: the day's entry sits next to your trends, so you see patterns as you write.</div>
+    <div class="note"><b>Live file preview</b>Type in the form and the right pane shows the exact Markdown that will be committed. Click a gratitude field to switch to gratitude.md.</div>
+    <div class="note"><b>Charts</b>Read from <span class="path">.journal/index.json</span>, so they need one request.</div>
+    <div class="note"><b>Build cost</b>Highest of the three (charts + index). Best as a Phase 4 "home" on top of A or B.</div>
+  </div>
+</div></section>
+
+<!-- HISTORY -->
+<section class="screen" id="history"><div class="wrap">
+  <div class="grid">
+    <div class="card s12">
+      <h2>2026 <small>darker = higher mood · empty = no entry</small></h2>
+      <div class="heat" id="heat"></div>
+    </div>
+    <div class="card s12">
+      <h2>Entries
+        <span style="display:flex;gap:8px;flex:1;justify-content:flex-end;max-width:520px">
+          <input placeholder="Search…" style="flex:2">
+          <select style="flex:1"><option>All types</option><option>Gratitude</option><option>Life</option><option>Check-ins</option></select>
+        </span>
+      </h2>
+      <div style="overflow-x:auto">
+      <table class="list">
+        <thead><tr><th>Date</th><th>Gratitude</th><th>Mood</th><th>Me / Rel / Work</th><th>Tags</th><th>File</th></tr></thead>
+        <tbody id="rows"></tbody>
+      </table>
+      </div>
+    </div>
+  </div>
+</div></section>
+
+<!-- MONTHLY CHECK-IN -->
+<section class="screen" id="checkin"><div class="wrap">
+  <div class="grid">
+    <div class="card s5">
+      <h2>November so far <small>17 entries</small></h2>
+      <div class="checkline"><span>best day</span>Sun 15: dinner with Priya &amp; Arun (mood 5)</div>
+      <div class="checkline"><span>hardest</span>Fri 13: work 1, "everything slipped"</div>
+      <div class="checkline"><span>trend</span>Work score down 3 weeks in a row</div>
+      <div class="checkline"><span>people</span>Mum ×9 · Sam ×6 · Priya ×4</div>
+      <div class="checkline"><span>words</span>sleep · walk · call · deck · dinner</div>
+      <div class="hbar" style="margin-top:16px"><span>W45</span><div><b style="width:70%"></b></div><span>3.5</span></div>
+      <div class="hbar"><span>W46</span><div><b style="width:82%"></b></div><span>4.1</span></div>
+      <div class="hbar"><span>W47</span><div><b style="width:72%"></b></div><span>3.6</span></div>
+    </div>
+    <div class="card s7">
+      <h2>Monthly reflection <small>saves to checkins/monthly/2026/2026-11.md</small></h2>
+      <div style="margin-bottom:12px"><label class="lbl">What am I most grateful for this month?</label><textarea></textarea></div>
+      <div style="margin-bottom:12px"><label class="lbl">Me: what changed in how I feel?</label><textarea></textarea></div>
+      <div style="margin-bottom:12px"><label class="lbl">Relationships: who did I show up for, and who did I miss?</label><textarea></textarea></div>
+      <div style="margin-bottom:12px"><label class="lbl">Work: why has the score dropped three weeks running?</label><textarea placeholder="The app writes this prompt from your data"></textarea></div>
+      <div style="margin-bottom:16px"><label class="lbl">Three intentions for December</label><input placeholder="1."><input placeholder="2." style="margin-top:6px"><input placeholder="3." style="margin-top:6px"></div>
+      <button class="btn primary" data-save-ck>Save monthly check-in</button>
+    </div>
+  </div>
+</div></section>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $=(s,r=document)=>r.querySelector(s),$$=(s,r=document)=>[...r.querySelectorAll(s)];
+function show(id){
+  $('#connect').classList.toggle('on',id==='connect');$('#shell').style.display=id==='connect'?'none':'';
+  $$('#shell .screen').forEach(s=>s.classList.toggle('on',s.id===id));
+  $$('[data-go]').forEach(b=>b.classList.toggle('on',b.dataset.go===id));scrollTo(0,0);
+}
+function toast(m){const t=$('#toast');t.innerHTML=m;t.classList.add('show');clearTimeout(t._h);t._h=setTimeout(()=>t.classList.remove('show'),3400)}
+document.addEventListener('click',e=>{
+  const g=e.target.closest('[data-go]');if(g){show(g.dataset.go);return}
+  if(e.target.closest('[data-save]'))toast('✓ 1 commit · 3 files<br>daily/2026/11/2026-11-18/gratitude.md<br>daily/2026/11/2026-11-18/life.md<br>.journal/index.json');
+  if(e.target.closest('[data-expand]'))toast('→ opens the full Me / Relationships / Work editor (prototype A layout)');
+  if(e.target.closest('[data-save-ck]'))toast('✓ committed checkins/monthly/2026/2026-11.md');
+});
+// live preview
+let which='life';
+const val=k=>$(`[data-s="${k}"]`).value;
+function preview(){
+  const g=$$('[data-g]').map(i=>i.value.trim());
+  const txt=which==='gratitude'
+  ?`---\ntype: gratitude\ndate: 2026-11-18\n---\n# Gratitude · Wed 18 Nov 2026\n\n${g.map((x,i)=>`${i+1}. ${x||'…'}`).join('\n')}\n`
+  :`---\ntype: life\ndate: 2026-11-18\nmood: ${val('mood')}\nenergy: ${val('energy')}\nscores:\n  me: ${val('me')}\n  relationships: ${val('relationships')}\n  work: ${val('work')}\n---\n# Life · Wed 18 Nov 2026\n\n${$('[data-n]').value||'…'}\n`;
+  $('#preview').textContent=txt;$('#fp').textContent=which+'.md';
+}
+$$('[data-s]').forEach(r=>r.addEventListener('input',()=>{r.nextElementSibling.textContent=r.value;which='life';preview()}));
+$$('[data-g]').forEach(i=>{i.addEventListener('input',()=>{which='gratitude';preview()});i.addEventListener('focus',()=>{which='gratitude';preview()})});
+$('[data-n]').addEventListener('input',()=>{which='life';preview()});
+$('[data-n]').addEventListener('focus',()=>{which='life';preview()});
+preview();
+// sparkline
+const moods=[3,4,3,2,3,4,4,5,3,2,4,5,3,4];
+$('#spark').innerHTML=moods.map((m,i)=>`<i class="${i===13?'t':''}" style="height:${m*20}%" title="mood ${m}"></i>`).join('');
+// heatmap: Jan 1 2026 is a Thursday → 3 empty cells in a Mon-first column
+let seed=7;const rnd=()=>(seed=(seed*9301+49297)%233280)/233280;
+const heat=$('#heat');let h='';for(let i=0;i<3;i++)h+='<i style="visibility:hidden"></i>';
+for(let d=1;d<=365;d++){let lvl='';if(d<=322){const r=rnd();lvl=r<.18?'':r<.35?'l1':r<.6?'l2':r<.85?'l3':'l4'}h+=`<i class="${lvl}" title="day ${d}"></i>`}
+heat.innerHTML=h;
+// table
+const rows=[['Wed 18','A long call with Mum…','4','4 / 3 / 2','deadline','—  draft'],['Tue 17','Sam covered the client call…','4','4 / 3 / 2','work','2026-11-17/'],['Mon 16','Sunny walk at lunch…','3','3 / 3 / 3','','2026-11-16/'],['Sun 15','Dinner with Priya & Arun…','5','5 / 5 / 3','friends','2026-11-15/ + W46'],['Sat 14','Finished the book…','4','—','reading','2026-11-14/']];
+$('#rows').innerHTML=rows.map(r=>`<tr><td><b>${r[0]}</b></td><td>${r[1]}</td><td>${r[2]}</td><td style="font-family:ui-monospace,monospace;font-size:13px">${r[3]}</td><td>${r[4]?`<span class="tag">#${r[4]}</span>`:''}</td><td><span class="path">${r[5]}</span></td></tr>`).join('');
+</script>
+</body>
+</html>
