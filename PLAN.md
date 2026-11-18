@@ -12,13 +12,17 @@
 
 | # | Decision | Recommendation | Why |
 |---|----------|----------------|-----|
-| 1 | Which UI direction to build (see `prototypes/`) | **A (Notebook) as the base, with B's guided flow as the mobile layout** | A is the fastest to build and reads like a journal. B fits a two-minute phone check-in better. They can share one data model. |
+| 1 | Which UI direction to build (see `prototypes/`) | **Decided: B's guided flow for entries, A's history and weekly check-in** | Entries are made mostly on a phone, where one question per screen fits best. A's calendar and side-by-side weekly review suit reading back. |
 | 2 | How you log in | **Phase 1: a fine-grained GitHub token. Phase 5: "Sign in with GitHub"** | A token needs no backend and can be limited to one repo. Real OAuth needs a small token-exchange server, which is extra work for a single-user app. |
 | 3 | Where the app is hosted | **Cloudflare Pages** (or GitHub Pages if this repo is public) | GitHub Pages only serves *private* repos on paid plans. The app code holds no secrets, so it can be public either way. |
 | 4 | Whether to encrypt entries before they're committed | **Off for now; revisit in Phase 5** | Plain Markdown stays readable on GitHub and in any editor. Encryption protects against GitHub itself reading your entries, but you lose that readability. |
 | 5 | Folder layout (date first vs. type first) | **Date first** (`daily/2026/11/2026-11-18/…`) | Opening one folder shows everything about a day. The app handles "all gratitude entries" views on its own. |
 
 ---
+
+## Status
+
+Phases 0–3 are built: Connect, Today (guided entry), History (calendar, streaks, search) and the weekly check-in. Saving is already done as one commit per save (Appendix C's later upgrade). Next: pick hosting (Decision 3), then Phase 4 (insights) and Phase 5 (offline/PWA polish).
 
 ## The app is a static website that reads and writes Markdown files in your private repo
 
