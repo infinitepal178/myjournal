@@ -54,6 +54,8 @@ export interface Weekly {
   daysWritten: number;
   averages: Partial<Record<'mood' | 'me' | 'relationships' | 'work', number>>;
   answers: WeeklyAnswer[];
+  /** This week's deeper question (rotates weekly). */
+  question?: string;
   created?: string;
   updated?: string;
 }
@@ -211,6 +213,7 @@ export function serializeWeekly(w: Weekly): string {
     end: w.end,
     days_written: w.daysWritten,
     averages: Object.keys(w.averages).length ? w.averages : undefined,
+    question: w.question || undefined,
     created: w.created,
     updated: w.updated,
   });
@@ -237,6 +240,7 @@ export function parseWeekly(md: string, week: string): Weekly {
     daysWritten: typeof data.days_written === 'number' ? data.days_written : 0,
     averages,
     answers: headings.map((h) => ({ prompt: h, answer: s.get(h.toLowerCase()) ?? '' })),
+    question: str(data.question),
     created: str(data.created),
     updated: str(data.updated),
   };

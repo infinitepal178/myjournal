@@ -246,3 +246,12 @@ pre.raw { white-space: pre-wrap; word-break: break-word; font: 12.5px/1.55 var(-
 details summary { cursor: pointer; font-weight: 600; }
 details ol { padding-left: 20px; margin: 8px 0 0; }
 details li { margin-bottom: 6px; }
+
+/* ---------- follow-ups ---------- */
+.tab-icon { position: relative; display: inline-flex; }
+.badge { position: absolute; top: -2px; right: -4px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); border: 2px solid var(--card); }
+.followup { display: flex; flex-direction: column; gap: 8px; }
+.fu-text { font-weight: 650; }
+.status { font: 600 11px var(--mono); text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 999px; background: var(--soft); white-space: nowrap; }
+.status-done { color: var(--checkin); }
+.status-not-done, .status-dropped { color: var(--mute); }

@@ -72,7 +72,12 @@ export function History({ journal, overview, onEdit }: { journal: Journal; overv
     <div>
       <div className="page-head">
         <span className="kicker">History</span>
-        <h1 className="title">Every day you've written</h1>
+        <div className="spread">
+          <h1 className="title">Every day you've written</h1>
+          <a href="#followups" className="btn sm">
+            Follow-ups{overview.followUps.items.some((f) => f.status === 'open') ? ` · ${overview.followUps.items.filter((f) => f.status === 'open').length}` : ''}
+          </a>
+        </div>
       </div>
 
       <div className="stats">

@@ -1,18 +1,20 @@
 // Today: Direction B's guided entry, one question per screen.
 
 import { useEffect, useMemo, useState } from 'react';
+import { AddFollowUp, CalendarLink, FollowUpReview, applyAnswers, type Answer } from '../components/FollowUps';
 import { MoodInput, ScaleInput, moodLabel, type ToastState } from '../components/ui';
-import { promptFor } from '../lib/config';
 import { addDays, dateKey, formatDay, formatShort, isoWeek, mondayOf, plural, weekday } from '../lib/dates';
 import { emptyLife, gratitudePath, lifePath, type LifeNotes, type Score, type Scores } from '../lib/entries';
+import { describeDue, detectPeople, dueFollowUps, newFollowUp, upcomingFollowUps, type FollowUp, type FollowUpFile } from '../lib/followups';
 import { explainError } from '../lib/github';
+import { gratitudePromptFor } from '../lib/prompts';
 import { ConflictError, type DayData, type Journal, type Overview } from '../lib/journal';
 import { knownPeople, streaks, type JournalIndex } from '../lib/journalIndex';
 import { clearDraft, loadDraft, saveDraft } from '../lib/store';
 import type { Tab } from '../App';
 
 type Mode = 'full' | 'quick';
-type StepId = 'mood' | 'g1' | 'g2' | 'g3' | 'me' | 'relationships' | 'work' | 'tomorrow' | 'review';
+type StepId = 'followups' | 'mood' | 'g1' | 'g2' | 'g3' | 'me' | 'relationships' | 'work' | 'tomorrow' | 'review';
 
 const STEPS: Record<Mode, StepId[]> = {
   full: ['mood', 'g1', 'g2', 'g3', 'me', 'relationships', 'work', 'tomorrow', 'review'],
@@ -30,11 +32,24 @@ interface Draft {
   scores: Scores;
   people: string[];
   notes: LifeNotes;
+  /** Steps fixed when the flow starts (follow-ups come first when any are due). */
+  steps?: StepId[];
+  /** How many times ↻ was tapped on the gratitude prompt. */
+  promptSkip?: number;
+  /** Answers to follow-ups that were due. */
+  answers?: Record<string, Answer>;
+  /** New reminders added while writing. */
+  newFollowUps?: FollowUp[];
+  /** Ask tomorrow whether the "tomorrow" line happened. */
+  remindTomorrow?: boolean;
 }
+
+const stepsOf = (d: Draft) => d.steps ?? STEPS[d.mode];
+const tomorrowId = (date: string) => `${date}-tomorrow`;
 
 const draftId = (date: string) => `day.${date}`;
 
-function draftFrom(day: DayData, mode: Mode, prompt: string): Draft {
+function draftFrom(day: DayData, mode: Mode, prompt: string, steps: StepId[], remindTomorrow: boolean): Draft {
   const l = day.life ?? emptyLife(day.date);
   const items = [...(day.gratitude?.items ?? [])];
   while (items.length < 3) items.push('');
@@ -49,6 +64,11 @@ function draftFrom(day: DayData, mode: Mode, prompt: string): Draft {
     scores: { ...l.scores },
     people: [...l.people],
     notes: { ...l.notes },
+    steps,
+    promptSkip: 0,
+    answers: {},
+    newFollowUps: [],
+    remindTomorrow,
   };
 }
 
@@ -62,14 +82,15 @@ interface Props {
   overview: Overview;
   date: string;
   setDate: (d: string) => void;
-  onSaved: (day: DayData, index: JournalIndex) => void;
+  onSaved: (day: DayData, index: JournalIndex, followUps: FollowUpFile | null) => void;
+  onFollowUps: (f: FollowUpFile) => void;
   toast: (t: ToastState) => void;
   goTo: (t: Tab) => void;
   /** Hides the tab bar while answering questions. */
   onFocusMode: (on: boolean) => void;
 }
 
-export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, onFocusMode }: Props) {
+export function Today({ journal, overview, date, setDate, onSaved, onFollowUps, toast, goTo, onFocusMode }: Props) {
   const today = dateKey();
   const [day, setDay] = useState<DayData | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -79,6 +100,9 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
   const [conflict, setConflict] = useState(false);
   const [draftTick, setDraftTick] = useState(0);
   const [reload, setReload] = useState(0);
+  const [homeAnswers, setHomeAnswers] = useState<Record<string, Answer>>({});
+  const [savingFollowUps, setSavingFollowUps] = useState(false);
+  const [justAdded, setJustAdded] = useState<FollowUp[]>([]);
 
   useEffect(() => {
     onFocusMode(view === 'flow');
@@ -119,8 +143,13 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
     );
   if (!day) return <div className="center muted">Loading {formatDay(date)}…</div>;
 
+  const due = date === today ? dueFollowUps(overview.followUps, today) : [];
+  const existingTomorrow = overview.followUps.items.find((f) => f.id === tomorrowId(date));
+
   const start = (mode: Mode) => {
-    setDraft(draftFrom(day, mode, promptFor(overview.config, date)));
+    const steps: StepId[] = mode === 'full' && due.length ? ['followups', ...STEPS[mode]] : STEPS[mode];
+    const remind = existingTomorrow ? existingTomorrow.status === 'open' : true;
+    setDraft(draftFrom(day, mode, gratitudePromptFor(overview.config, date), steps, remind));
     setConflict(false);
     setView('flow');
   };
@@ -144,13 +173,26 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
       toast({ text: 'Write at least one thing before saving.', error: true });
       return;
     }
+    // Follow-ups: answers to due ones, new reminders, and the "tomorrow" line.
+    const changes: FollowUp[] = [...applyAnswers(due, draft.answers ?? {}, today), ...(draft.newFollowUps ?? [])];
+    const tomorrowText = draft.notes.tomorrow.trim();
+    if (draft.mode === 'full') {
+      if (draft.remindTomorrow && tomorrowText && (!existingTomorrow || existingTomorrow.status === 'open'))
+        changes.push({
+          ...newFollowUp(tomorrowText, date, addDays(date, 1), detectPeople(tomorrowText, people), lifePath(date), tomorrowId(date)),
+          ...(existingTomorrow ? { due: existingTomorrow.due, snoozed: existingTomorrow.snoozed } : {}),
+        });
+      else if (existingTomorrow?.status === 'open' && (!draft.remindTomorrow || !tomorrowText))
+        changes.push({ ...existingTomorrow, status: 'dropped', closed: today });
+    }
     setSaving(true);
     setConflict(false);
     try {
-      const r = await journal.saveDay(day, parts, force);
+      const r = await journal.saveDay(day, parts, force, changes);
       clearDraft(draftId(date));
       setDay(r.day);
-      onSaved(r.day, r.index);
+      onSaved(r.day, r.index, r.followUps);
+      setJustAdded(changes.filter((c) => c.status === 'open' && !due.some((d) => d.id === c.id)));
       setView('done');
     } catch (e) {
       if (e instanceof ConflictError) setConflict(true);
@@ -162,7 +204,7 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
 
   // ---------- flow ----------
   if (view === 'flow' && draft) {
-    const steps = STEPS[draft.mode];
+    const steps = stepsOf(draft);
     const id = steps[draft.step];
     const last = draft.step === steps.length - 1;
     const set = (patch: Partial<Draft>) => setDraft((d) => (d ? { ...d, ...patch } : d));
@@ -192,6 +234,14 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
         </div>
 
         <div className="flow-body" key={id}>
+          {id === 'followups' && (
+            <div className="stack">
+              <span className="kicker">Follow-up{due.length > 1 ? `s · ${due.length}` : ''}</span>
+              <h1 className="q">{due.length > 1 ? 'You said you would do these. How did they go?' : 'You said you would do this. How did it go?'}</h1>
+              <FollowUpReview items={due} answers={draft.answers ?? {}} onChange={(answers) => set({ answers })} today={today} />
+            </div>
+          )}
+
           {id === 'mood' && (
             <div className="stack">
               <span className="kicker">Check-in · {formatDay(date)}</span>
@@ -223,7 +273,22 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
                 onChange={(e) => setItem(Number(id[1]) - 1, e.target.value)}
               />
               {id === 'g1' && <p className="small muted">Big or small. A person, a moment, something you usually overlook.</p>}
-              {id === 'g3' && <p className="small muted">Today's prompt. It changes every day.</p>}
+              {id === 'g3' && (
+                <div className="spread small muted">
+                  <span>Today's prompt. It changes every day.</span>
+                  <button
+                    type="button"
+                    className="btn sm ghost"
+                    aria-label="Show a different prompt"
+                    onClick={() => {
+                      const skip = (draft.promptSkip ?? 0) + 1;
+                      set({ promptSkip: skip, prompt: gratitudePromptFor(overview.config, date, skip) });
+                    }}
+                  >
+                    ↻ Another prompt
+                  </button>
+                </div>
+              )}
             </div>
           )}
 
@@ -255,6 +320,15 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
                 value={draft.notes.relationships}
                 onChange={(e) => set({ notes: { ...draft.notes, relationships: e.target.value } })}
               />
+              <AddFollowUp
+                from={date}
+                known={people}
+                source={lifePath(date)}
+                added={draft.newFollowUps ?? []}
+                onAdd={(f) => set({ newFollowUps: [...(draft.newFollowUps ?? []), f] })}
+                onRemove={(fid) => set({ newFollowUps: (draft.newFollowUps ?? []).filter((x) => x.id !== fid) })}
+                label="Plan to do something for someone? Remind me"
+              />
             </div>
           )}
 
@@ -264,6 +338,15 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
               <h1 className="q">One win, one friction.</h1>
               <ScaleInput label="Work" value={draft.scores.work} onChange={(work) => set({ scores: { ...draft.scores, work } })} low="rough" high="great" />
               <textarea id="notes-work" className="textarea" placeholder={'Win: …\nFriction: …'} value={draft.notes.work} onChange={(e) => set({ notes: { ...draft.notes, work: e.target.value } })} />
+              <AddFollowUp
+                from={date}
+                known={people}
+                source={lifePath(date)}
+                added={draft.newFollowUps ?? []}
+                onAdd={(f) => set({ newFollowUps: [...(draft.newFollowUps ?? []), f] })}
+                onRemove={(fid) => set({ newFollowUps: (draft.newFollowUps ?? []).filter((x) => x.id !== fid) })}
+                label="Committed to something? Remind me to check"
+              />
             </div>
           )}
 
@@ -272,6 +355,10 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
               <span className="kicker">Tomorrow</span>
               <h1 className="q">What one thing would make tomorrow good?</h1>
               <input id="notes-tomorrow" className="input" autoFocus placeholder="One line" value={draft.notes.tomorrow} onChange={(e) => set({ notes: { ...draft.notes, tomorrow: e.target.value } })} />
+              <label className="row small" style={{ gap: 8, flexWrap: 'nowrap' }}>
+                <input id="remind-tomorrow" type="checkbox" checked={draft.remindTomorrow ?? true} onChange={(e) => set({ remindTomorrow: e.target.checked })} />
+                <span>Ask me {isToday ? 'tomorrow' : `on ${formatDay(addDays(date, 1))}`} whether it happened</span>
+              </label>
             </div>
           )}
 
@@ -286,6 +373,13 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
               }}
               onForce={() => save(true)}
               onEdit={(step) => set({ step })}
+              answered={Object.keys(draft.answers ?? {}).length}
+              reminders={[
+                ...(draft.mode === 'full' && (draft.remindTomorrow ?? true) && draft.notes.tomorrow.trim()
+                  ? [{ text: draft.notes.tomorrow.trim(), due: addDays(date, 1) }]
+                  : []),
+                ...(draft.newFollowUps ?? []),
+              ]}
             />
           )}
         </div>
@@ -315,6 +409,19 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
         <p className="muted" style={{ margin: '4px 0 18px' }}>
           Saved to your repo. {date === today ? 'See you tomorrow.' : `${formatDay(date)} is filled in.`}
         </p>
+        {justAdded.length > 0 && (
+          <div className="card stack" style={{ width: '100%', textAlign: 'left', gap: 8, marginBottom: 12 }}>
+            <span className="label">I'll ask you about</span>
+            {justAdded.map((f) => (
+              <div key={f.id}>
+                <div className="small">
+                  {f.text} <span className="muted">· {describeDue(f.due, today)}</span>
+                </div>
+                <CalendarLink f={f} />
+              </div>
+            ))}
+          </div>
+        )}
         <div className="stack" style={{ width: '100%' }}>
           <button className="btn wide" onClick={() => goTo('history')}>
             See it in History
@@ -367,12 +474,46 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
         ))}
       </div>
 
+      {due.length > 0 && !stored && (
+        <div className="card strong stack">
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 17 }}>
+              {due.length === 1 ? 'A follow-up is due' : `${due.length} follow-ups are due`}
+            </div>
+            <div className="small muted">You said you'd do {due.length === 1 ? 'this' : 'these'}. How did it go?</div>
+          </div>
+          <FollowUpReview items={due} answers={homeAnswers} onChange={setHomeAnswers} today={today} />
+          {Object.keys(homeAnswers).length > 0 && (
+            <button
+              className="btn primary"
+              disabled={savingFollowUps}
+              onClick={async () => {
+                setSavingFollowUps(true);
+                try {
+                  const file = await journal.saveFollowUps(applyAnswers(due, homeAnswers, today));
+                  onFollowUps(file);
+                  setHomeAnswers({});
+                  toast({ text: 'Follow-ups saved' });
+                } catch (e) {
+                  toast({ text: explainError(e), error: true });
+                } finally {
+                  setSavingFollowUps(false);
+                }
+              }}
+            >
+              {savingFollowUps ? 'Saving…' : 'Save follow-ups'}
+            </button>
+          )}
+          <span className="tiny muted">Or answer them as the first step of your full check-in.</span>
+        </div>
+      )}
+
       {stored && (
         <div className="card strong stack">
           <div>
             <div style={{ fontWeight: 700, fontSize: 17 }}>Continue where you left off</div>
             <div className="small muted">
-              Unsaved {stored.mode === 'full' ? 'full check-in' : 'gratitude'} on this device · step {stored.step + 1} of {STEPS[stored.mode].length}
+              Unsaved {stored.mode === 'full' ? 'full check-in' : 'gratitude'} on this device · step {stored.step + 1} of {stepsOf(stored).length}
             </div>
           </div>
           <div className="row">
@@ -459,6 +600,13 @@ export function Today({ journal, overview, date, setDate, onSaved, toast, goTo, 
         </div>
       )}
 
+      {upcomingFollowUps(overview.followUps, today).length > 0 && (
+        <a href="#followups" className="small muted">
+          {upcomingFollowUps(overview.followUps, today).length} follow-up{upcomingFollowUps(overview.followUps, today).length === 1 ? '' : 's'} coming up, next{' '}
+          {describeDue(upcomingFollowUps(overview.followUps, today)[0].due, today)} ›
+        </a>
+      )}
+
       <div className="spread small muted">
         <span>
           {current ? `${plural(current, 'day')} in a row` : 'Write today to start a streak'}
@@ -522,9 +670,27 @@ function PeoplePicker({ known, value, onChange }: { known: string[]; value: stri
   );
 }
 
-function Review({ draft, date, conflict, onReload, onForce, onEdit }: { draft: Draft; date: string; conflict: boolean; onReload: () => void; onForce: () => void; onEdit: (step: number) => void }) {
+function Review({
+  draft,
+  date,
+  conflict,
+  onReload,
+  onForce,
+  onEdit,
+  answered,
+  reminders,
+}: {
+  draft: Draft;
+  date: string;
+  conflict: boolean;
+  onReload: () => void;
+  onForce: () => void;
+  onEdit: (step: number) => void;
+  answered: number;
+  reminders: { text: string; due: string }[];
+}) {
   const items = draft.items.map((s) => s.trim()).filter(Boolean);
-  const steps = STEPS[draft.mode];
+  const steps = stepsOf(draft);
   const at = (id: StepId) => steps.indexOf(id);
   return (
     <div className="review">
@@ -579,6 +745,19 @@ function Review({ draft, date, conflict, onReload, onForce, onEdit }: { draft: D
           {draft.notes.tomorrow && <div className="small muted">Tomorrow: {draft.notes.tomorrow}</div>}
         </div>
       )}
+      {(answered > 0 || reminders.length > 0) && (
+        <div className="card">
+          <div className="spread">
+            <span className="label">Follow-ups</span>
+          </div>
+          {answered > 0 && <div className="small" style={{ marginTop: 4 }}>{answered === 1 ? '1 follow-up answered' : `${answered} follow-ups answered`}</div>}
+          {reminders.map((r, i) => (
+            <div key={i} className="small" style={{ marginTop: 4 }}>
+              ↪ {r.text} <span className="muted">· I'll ask {describeDue(r.due, date)}</span>
+            </div>
+          ))}
+        </div>
+      )}
       <span className="kicker" style={{ marginTop: 6 }}>
         Will save to your repo
       </span>
@@ -586,6 +765,7 @@ function Review({ draft, date, conflict, onReload, onForce, onEdit }: { draft: D
         {items.length > 0 && <div>{gratitudePath(date)}</div>}
         {draft.mode === 'full' && <div>{lifePath(date)}</div>}
         <div>.journal/index.json</div>
+        {(answered > 0 || reminders.length > 0) && <div>followups.md + .journal/followups.json</div>}
       </div>
     </div>
   );

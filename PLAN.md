@@ -22,7 +22,7 @@
 
 ## Status
 
-Phases 0–3 are built: Connect, Today (guided entry), History (calendar, streaks, search) and the weekly check-in. Saving is already done as one commit per save (Appendix C's later upgrade). Next: pick hosting (Decision 3), then Phase 4 (insights) and Phase 5 (offline/PWA polish).
+Phases 0–3 are built: Connect, Today (guided entry), History (calendar, streaks, search) and the weekly check-in. Also built: follow-ups on things you said you'd do, and a rotating library of about 65 prompts with a ↻ refresh. Saving is already done as one commit per save (Appendix C's later upgrade). Next: pick hosting (Decision 3), then Phase 4 (insights) and Phase 5 (offline/PWA polish).
 
 ## The app is a static website that reads and writes Markdown files in your private repo
 

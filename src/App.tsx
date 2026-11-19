@@ -2,17 +2,19 @@ import { useCallback, useEffect, useState } from 'react';
 import { Icon, Loading, Toast, type ToastState } from './components/ui';
 import { dateKey } from './lib/dates';
 import { gratitudePath, lifePath, weeklyPath } from './lib/entries';
+import { dueFollowUps, type FollowUpFile } from './lib/followups';
 import { GitHub, GitHubError, explainError } from './lib/github';
 import { Journal, overviewFrom, type DayData, type Overview } from './lib/journal';
 import type { JournalIndex } from './lib/journalIndex';
 import { clearDevice, loadSettings, type Settings as SettingsT } from './lib/store';
 import { Checkin } from './screens/Checkin';
 import { Connect } from './screens/Connect';
+import { FollowUps } from './screens/FollowUps';
 import { History } from './screens/History';
 import { Settings } from './screens/Settings';
 import { Today } from './screens/Today';
 
-export type Tab = 'today' | 'history' | 'checkin' | 'settings';
+export type Tab = 'today' | 'history' | 'checkin' | 'settings' | 'followups';
 const TABS: { id: Tab; label: string }[] = [
   { id: 'today', label: 'Today' },
   { id: 'history', label: 'History' },
@@ -22,7 +24,7 @@ const TABS: { id: Tab; label: string }[] = [
 
 const tabFromHash = (): Tab => {
   const h = location.hash.slice(1);
-  return TABS.some((t) => t.id === h) ? (h as Tab) : 'today';
+  return h === 'followups' || TABS.some((t) => t.id === h) ? (h as Tab) : 'today';
 };
 
 const makeJournal = (s: SettingsT) => new Journal(new GitHub(s.owner, s.repo, s.token), s.branch, `https://github.com/${s.owner}/${s.repo}`);
@@ -83,21 +85,31 @@ export function App() {
       />
     );
 
-  const onDaySaved = (day: DayData, index: JournalIndex) =>
+  const onDaySaved = (day: DayData, index: JournalIndex, followUps: FollowUpFile | null) =>
     setOverview((o) => {
       if (!o) return o;
       const files = [...o.files];
       if (day.gratitude) files.push(gratitudePath(day.date));
       if (day.life) files.push(lifePath(day.date));
-      return overviewFrom(files, index, o.config);
+      return overviewFrom(files, index, o.config, followUps ?? o.followUps);
     });
+  const onFollowUps = (f: FollowUpFile) => setOverview((o) => o && { ...o, followUps: f });
+  const dueCount = overview ? dueFollowUps(overview.followUps, dateKey()).length : 0;
 
   const nav = (
     <nav className="tabbar" aria-label="Sections" hidden={focus}>
       <span className="brand">myjournal</span>
       {TABS.map((t) => (
-        <a key={t.id} href={`#${t.id}`} aria-current={tab === t.id ? 'page' : undefined} onClick={() => window.scrollTo(0, 0)}>
-          <Icon name={t.id} />
+        <a
+          key={t.id}
+          href={`#${t.id}`}
+          aria-current={tab === t.id || (tab === 'followups' && t.id === 'history') ? 'page' : undefined}
+          onClick={() => window.scrollTo(0, 0)}
+        >
+          <span className="tab-icon">
+            <Icon name={t.id as 'today'} />
+            {t.id === 'today' && dueCount > 0 && <i className="badge" aria-label={`${dueCount} follow-ups due`} />}
+          </span>
           {t.label}
         </a>
       ))}
@@ -128,6 +140,7 @@ export function App() {
         date={date}
         setDate={setDate}
         onSaved={onDaySaved}
+        onFollowUps={onFollowUps}
         toast={setToast}
         goTo={goTo}
         onFocusMode={setFocus}
@@ -144,13 +157,14 @@ export function App() {
         }}
       />
     );
+  else if (tab === 'followups') body = <FollowUps journal={journal} overview={overview} onSaved={onFollowUps} toast={setToast} />;
   else if (tab === 'checkin')
     body = (
       <Checkin
         journal={journal}
         overview={overview}
         toast={setToast}
-        onSaved={(w) => setOverview((o) => o && overviewFrom([...o.files, weeklyPath(w)], o.index, o.config))}
+        onSaved={(w, f) => setOverview((o) => o && overviewFrom(w ? [...o.files, weeklyPath(w)] : [...o.files], o.index, o.config, f ?? o.followUps))}
       />
     );
   else
@@ -159,7 +173,7 @@ export function App() {
         settings={settings}
         journal={journal}
         entryCount={overview.written.size}
-        onRebuilt={(index) => setOverview((o) => o && overviewFrom([...o.files], index, o.config))}
+        onRebuilt={(index) => setOverview((o) => o && overviewFrom([...o.files], index, o.config, o.followUps))}
         onDisconnect={disconnect}
         toast={setToast}
       />

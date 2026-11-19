@@ -19,6 +19,17 @@ import {
   type Life,
   type Weekly,
 } from './entries';
+import {
+  FOLLOWUPS_MD_PATH,
+  FOLLOWUPS_PATH,
+  emptyFollowUps,
+  mergeFollowUps,
+  parseFollowUps,
+  renderFollowUpsMd,
+  serializeFollowUps,
+  type FollowUp,
+  type FollowUpFile,
+} from './followups';
 import { GitHub, type FileChange, type RepoInfo } from './github';
 import { emptyIndex, parseIndex, serializeIndex, withDay, type JournalIndex } from './journalIndex';
 
@@ -38,6 +49,7 @@ export interface Overview {
   weeklies: Set<string>;
   index: JournalIndex;
   config: JournalConfig;
+  followUps: FollowUpFile;
 }
 
 export interface DayData {
@@ -53,7 +65,7 @@ export interface WeeklyData {
   raw: string | null;
 }
 
-export function overviewFrom(files: string[], index: JournalIndex, config: JournalConfig): Overview {
+export function overviewFrom(files: string[], index: JournalIndex, config: JournalConfig, followUps: FollowUpFile = emptyFollowUps()): Overview {
   const gratitudeDays = new Set<string>();
   const lifeDays = new Set<string>();
   const weeklies = new Set<string>();
@@ -71,6 +83,7 @@ export function overviewFrom(files: string[], index: JournalIndex, config: Journ
     weeklies,
     index,
     config,
+    followUps,
   };
 }
 
@@ -87,6 +100,11 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   );
   return out;
 }
+
+const followUpFiles = (f: FollowUpFile): FileChange[] => [
+  { path: FOLLOWUPS_PATH, content: serializeFollowUps(f) },
+  { path: FOLLOWUPS_MD_PATH, content: renderFollowUpsMd(f) },
+];
 
 export class Journal {
   constructor(
@@ -115,12 +133,11 @@ export class Journal {
   }
 
   async overview(): Promise<Overview> {
-    const [files, indexText, configText] = await Promise.all([
-      this.gh.listFiles(this.branch),
-      this.gh.readFile(INDEX_PATH, this.branch),
-      this.gh.readFile(CONFIG_PATH, this.branch),
-    ]);
-    return overviewFrom(files, parseIndex(indexText), parseConfig(configText));
+    const files = await this.gh.listFiles(this.branch);
+    const has = new Set(files);
+    const read = (p: string) => (has.has(p) ? this.gh.readFile(p, this.branch) : Promise.resolve(null));
+    const [indexText, configText, followText] = await Promise.all([read(INDEX_PATH), read(CONFIG_PATH), read(FOLLOWUPS_PATH)]);
+    return overviewFrom(files, parseIndex(indexText), parseConfig(configText), parseFollowUps(followText));
   }
 
   async loadDay(date: string): Promise<DayData> {
@@ -141,7 +158,8 @@ export class Journal {
     loaded: DayData,
     parts: { gratitude?: Gratitude; life?: Life },
     force = false,
-  ): Promise<{ day: DayData; index: JournalIndex }> {
+    followUps: FollowUp[] = [],
+  ): Promise<{ day: DayData; index: JournalIndex; followUps: FollowUpFile | null }> {
     const now = localTimestamp();
     const date = loaded.date;
     const gratitude = parts.gratitude && { ...parts.gratitude, created: loaded.gratitude?.created ?? now, updated: now };
@@ -149,8 +167,9 @@ export class Journal {
     const gText = gratitude ? serializeGratitude(gratitude) : loaded.raw.gratitude;
     const lText = life ? serializeLife(life) : loaded.raw.life;
     let index = emptyIndex();
+    let follow: FollowUpFile | null = null;
 
-    const what = [gratitude && 'gratitude', life && 'life'].filter(Boolean).join(' + ');
+    const what = [gratitude && 'gratitude', life && 'life', followUps.length && 'follow-ups'].filter(Boolean).join(' + ');
     await this.gh.commit(this.branch, `${what}: ${date}`, async (head) => {
       if (!force) {
         const changed: string[] = [];
@@ -168,10 +187,15 @@ export class Journal {
       if (gratitude) files.push({ path: gratitudePath(date), content: gText! });
       if (life) files.push({ path: lifePath(date), content: lText! });
       files.push({ path: INDEX_PATH, content: serializeIndex(index) });
+      if (followUps.length) {
+        follow = await this.followUpsAt(head, followUps);
+        files.push(...followUpFiles(follow));
+      }
       return files;
     });
 
     return {
+      followUps: follow,
       day: {
         date,
         gratitude: gratitude ?? loaded.gratitude,
@@ -187,16 +211,46 @@ export class Journal {
     return { weekly: raw === null ? null : parseWeekly(raw, week), raw };
   }
 
-  async saveWeekly(loaded: WeeklyData, weekly: Weekly, force = false): Promise<WeeklyData> {
+  /** Save a weekly check-in (or only follow-up answers, when `weekly` is null). */
+  async saveWeekly(
+    loaded: WeeklyData,
+    weekly: Weekly | null,
+    force = false,
+    followUps: FollowUp[] = [],
+  ): Promise<{ data: WeeklyData; followUps: FollowUpFile | null }> {
     const now = localTimestamp();
-    const w = { ...weekly, created: loaded.weekly?.created ?? now, updated: now };
-    const text = serializeWeekly(w);
-    const path = weeklyPath(w.week);
-    await this.gh.commit(this.branch, `weekly check-in: ${w.week}`, async (head) => {
-      if (!force && (await this.gh.readFile(path, head)) !== loaded.raw) throw new ConflictError([path]);
-      return [{ path, content: text }];
+    const w = weekly && { ...weekly, created: loaded.weekly?.created ?? now, updated: now };
+    const text = w ? serializeWeekly(w) : loaded.raw;
+    let follow: FollowUpFile | null = null;
+    const label = w ? `weekly check-in${followUps.length ? ' + follow-ups' : ''}: ${w.week}` : 'follow-ups';
+    await this.gh.commit(this.branch, label, async (head) => {
+      const files: FileChange[] = [];
+      if (w) {
+        const path = weeklyPath(w.week);
+        if (!force && (await this.gh.readFile(path, head)) !== loaded.raw) throw new ConflictError([path]);
+        files.push({ path, content: text! });
+      }
+      if (followUps.length) {
+        follow = await this.followUpsAt(head, followUps);
+        files.push(...followUpFiles(follow));
+      }
+      return files;
     });
-    return { weekly: w, raw: text };
+    return { data: w ? { weekly: w, raw: text } : loaded, followUps: follow };
+  }
+
+  /** Save follow-up changes on their own (e.g. answering one from the Today screen). */
+  async saveFollowUps(changes: FollowUp[], message = 'follow-ups'): Promise<FollowUpFile> {
+    let follow = emptyFollowUps();
+    await this.gh.commit(this.branch, message, async (head) => {
+      follow = await this.followUpsAt(head, changes);
+      return followUpFiles(follow);
+    });
+    return follow;
+  }
+
+  private async followUpsAt(head: string, changes: FollowUp[]): Promise<FollowUpFile> {
+    return mergeFollowUps(parseFollowUps(await this.gh.readFile(FOLLOWUPS_PATH, head)), changes);
   }
 
   private async buildIndex(files: string[]): Promise<JournalIndex> {

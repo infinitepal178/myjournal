@@ -6,6 +6,9 @@ A phone-first journal with a daily **gratitude** entry and a **life check-in** (
 - **History:** a month calendar with an entry viewer beside it, plus streaks and search (prototype A).
 - **Check-in:** your week's scores and gratitude lines next to five reflection prompts (prototype A).
 
+- **Follow-ups:** when you say you'll do something, the app asks how it went on that day. This covers your "tomorrow" line, the next-week plans in the weekly check-in, and any reminder you add while writing. Due ones show on Today (a dot on the tab) and at the start of your next check-in. See them all from History → Follow-ups, and add them to Google Calendar if you want a phone reminder.
+- **Prompts:** the third gratitude question and one deeper weekly question rotate daily and weekly from a built-in library of about 65 prompts (`src/lib/prompts.ts`), mixed with your own from `.journal/config.json`. Tap ↻ for a different one.
+
 Background: [PLAN.md](PLAN.md) and the clickable wireframes in [`prototypes/`](prototypes/index.html).
 
 ## What gets saved
@@ -18,7 +21,27 @@ daily/2026/11/2026-11-18/life.md
 checkins/weekly/2026/2026-W47.md
 .journal/config.json      your prompts (edit on GitHub to change them)
 .journal/index.json       summary for streaks, search and the weekly view
+followups.md              things you said you'd do, and what happened (readable)
+.journal/followups.json   the same follow-ups, as data for the app
 ```
+
+### Your own prompts
+
+Edit `.journal/config.json` in your journal repo (Settings → Edit prompts):
+
+```json
+{
+  "builtInPrompts": true,
+  "gratitudePrompts": ["What did my dog teach me today?"],
+  "weeklyPrompts": ["Best moment of the week", "A relationship to invest in next week"],
+  "weeklyQuestions": ["What would future me thank me for this week?"],
+  "people": ["Mum", "Priya"]
+}
+```
+
+- `gratitudePrompts` and `weeklyQuestions` are mixed into the built-in lists. Set `builtInPrompts` to `false` to use only yours.
+- `weeklyPrompts` are the fixed questions on every weekly check-in. Any prompt that mentions "next week" gets a follow-up by default.
+- Use straight quotes `"`, not curly ones, and a comma after every item except the last. If the file can't be read, the app uses its defaults.
 
 Each save is one commit. Unsaved drafts stay on your device until you save.
 
@@ -57,6 +80,8 @@ Code map:
 | `src/lib/entries.ts` | Entry types and their Markdown format, and the folder paths |
 | `src/lib/github.ts` | GitHub API client; one commit per save using the Git Data API |
 | `src/lib/journal.ts` | Load/save days and check-ins, first-run setup, conflict detection |
+| `src/lib/prompts.ts` | Built-in prompt library and the daily/weekly rotation |
+| `src/lib/followups.ts` | Follow-up data, due dates, `followups.md` |
 | `src/lib/journalIndex.ts` | Streaks, weekly summary and search over `.journal/index.json` |
 | `src/screens/` | Connect, Today, History, Check-in, Settings |
 | `tests/fake-github.mjs` | In-memory GitHub used by both test suites |
